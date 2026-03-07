@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Simulateur Monte Carlo — Trajectoires de Trading</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#f7f6f3;
+  --surface:#ffffff;
+  --surface2:#f0efe9;
+  --border:#e2dfd8;
+  --border2:#ccc9c0;
+  --accent:#1a1a1a;
+  --accent2:#c0392b;
+  --accent3:#2c6e49;
+  --blue:#1d3557;
+  --text:#1a1a1a;
+  --muted:#8a8880;
+  --muted2:#5c5a55;
+  --font-display:'Inter',sans-serif;
+  --font-serif:'Lora',serif;
+  --font-mono:'DM Mono',monospace;
+}
+
+html{scroll-behavior:smooth}
+
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-display);
+  min-height:100vh;
+  padding:0;
+  overflow-x:hidden;
+}
+
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(26,26,26,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26,26,26,0.03) 1px, transparent 1px);
+  background-size:32px 32px;
+  pointer-events:none;z-index:0;
+}
+
+.layout{
+  display:grid;
+  grid-template-columns:340px 1fr;
+  min-height:100vh;
+  position:relative;z-index:1;
+}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  padding:32px 24px;
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  position:sticky;
+  top:0;
+  height:100vh;
+  overflow-y:auto;
+}
+
+.sidebar::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-track{background:transparent}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+
+.logo{
+  display:flex;align-items:center;gap:10px;
+  margin-bottom:28px;
+  padding-bottom:20px;
+  border-bottom:1px solid var(--border);
+}
+
+.logo-icon{
+  width:36px;height:36px;
+  border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  overflow:hidden;
+}
+
+.logo-text{
+  font-size:11px;font-weight:500;
+  color:var(--muted);
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  line-height:1.4;
+}
+
+.logo-text strong{color:var(--text);display:block;font-size:13px;font-weight:600;letter-spacing:0.02em}
+
+.section-title{
+  font-size:10px;
+  font-family:var(--font-mono);
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:0.15em;
+  margin:22px 0 10px;
+  padding-bottom:6px;
+  border-bottom:1px solid var(--border);
+}
+
+/* Input groups */
+.input-group{margin-bottom:16px}
+
+.input-label{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:7px;
+}
+
+.input-label span:first-child{
+  font-size:12px;font-weight:500;
+  color:var(--muted2);
+}
+
+.input-val{
+  font-family:var(--font-mono);
+  font-size:12px;
+  color:var(--blue);
+  background:rgba(29,53,87,0.06);
+  border:1px solid rgba(29,53,87,0.15);
+  padding:2px 8px;border-radius:4px;
+  min-width:52px;text-align:right;
+}
+
+input[type=range]{
+  -webkit-appearance:none;
+  width:100%;height:3px;
+  background:var(--border2);
+  border-radius:3px;outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:15px;height:15px;border-radius:50%;
+  background:var(--accent);
+  box-shadow:0 1px 4px rgba(0,0,0,0.2);
+  cursor:pointer;
+  transition:transform .15s;
+}
+input[type=range]::-webkit-slider-thumb:hover{
+  transform:scale(1.2);
+}
+
+/* Special inputs */
+.input-row{
+  display:flex;align-items:center;gap:8px;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:8px 12px;
+  transition:border-color .2s;
+}
+.input-row:focus-within{border-color:var(--accent)}
+
+.input-row label{
+  font-size:11px;color:var(--muted);
+  font-family:var(--font-mono);
+  white-space:nowrap;
+}
+
+.input-row input[type=number]{
+  background:none;border:none;outline:none;
+  color:var(--text);
+  font-family:var(--font-mono);
+  font-size:13px;font-weight:500;
+  width:100%;text-align:right;
+}
+.input-row input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+
+/* Ruin threshold */
+.ruin-group{
+  background:rgba(192,57,43,0.04);
+  border:1px solid rgba(192,57,43,0.18);
+  border-radius:8px;
+  padding:14px;
+  margin-top:4px;
+}
+.ruin-title{
+  font-size:11px;font-family:var(--font-mono);
+  color:var(--accent2);
+  margin-bottom:10px;
+  display:flex;align-items:center;gap:6px;
+}
+.ruin-title::before{
+  content:'';width:5px;height:5px;border-radius:50%;
+  background:var(--accent2);
+}
+
+/* Button */
+.btn-run{
+  width:100%;
+  padding:13px;
+  margin-top:20px;
+  border:none;border-radius:6px;
+  background:var(--accent);
+  color:#fff;
+  font-family:var(--font-display);
+  font-size:13px;font-weight:600;
+  letter-spacing:0.06em;text-transform:uppercase;
+  cursor:pointer;
+  transition:transform .15s,box-shadow .15s,opacity .15s;
+  box-shadow:0 2px 8px rgba(0,0,0,0.15);
+}
+.btn-run:hover:not(:disabled){
+  transform:translateY(-1px);
+  box-shadow:0 4px 16px rgba(0,0,0,0.2);
+}
+.btn-run:active:not(:disabled){transform:translateY(0)}
+.btn-run:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* Loading */
+.loading{
+  display:none;
+  align-items:center;gap:10px;
+  margin-top:12px;
+  padding:10px 12px;
+  background:rgba(29,53,87,0.05);
+  border:1px solid rgba(29,53,87,0.12);
+  border-radius:6px;
+  font-family:var(--font-mono);
+  font-size:11px;color:var(--blue);
+}
+.loading.show{display:flex}
+.spin{
+  width:12px;height:12px;
+  border:2px solid rgba(29,53,87,0.15);
+  border-top-color:var(--blue);
+  border-radius:50%;
+  animation:spin .7s linear infinite;
+  flex-shrink:0;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── MAIN ── */
+.main{
+  display:flex;flex-direction:column;
+  padding:32px;
+  gap:24px;
+  overflow:hidden;
+}
+
+/* Header */
+.main-header{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  flex-wrap:wrap;gap:16px;
+  padding-bottom:20px;
+  border-bottom:1px solid var(--border);
+}
+
+.main-title{
+  font-family:var(--font-serif);
+  font-size:30px;font-weight:600;
+  line-height:1.2;letter-spacing:-0.01em;
+  color:var(--text);
+}
+
+.main-subtitle{
+  font-size:13px;color:var(--muted2);
+  margin-top:6px;font-weight:400;
+  max-width:500px;line-height:1.6;
+}
+
+/* Stats bar */
+.stats-bar{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+}
+
+.stat-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:16px;
+  position:relative;overflow:hidden;
+}
+.stat-card::before{
+  content:'';
+  position:absolute;top:0;left:0;right:0;height:2px;
+}
+.stat-card.green::before{background:var(--accent3)}
+.stat-card.red::before{background:var(--accent2)}
+.stat-card.amber::before{background:var(--blue)}
+.stat-card.blue::before{background:var(--muted)}
+
+.stat-label{
+  font-size:10px;font-family:var(--font-mono);
+  color:var(--muted);text-transform:uppercase;
+  letter-spacing:0.1em;margin-bottom:6px;
+}
+.stat-value{
+  font-size:20px;font-weight:600;
+  font-family:var(--font-mono);
+  line-height:1;color:var(--text);
+}
+.stat-card.green .stat-value{color:var(--accent3)}
+.stat-card.red .stat-value{color:var(--accent2)}
+.stat-card.amber .stat-value{color:var(--blue)}
+.stat-card.blue .stat-value{color:var(--muted2)}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* Tabs */
+.tabs-wrapper{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  overflow:hidden;
+  flex:1;
+  display:flex;flex-direction:column;
+}
+
+.tabs-nav{
+  display:flex;
+  border-bottom:1px solid var(--border);
+  background:var(--surface2);
+}
+
+.tab-btn{
+  flex:1;padding:12px 16px;
+  background:none;border:none;
+  font-family:var(--font-display);
+  font-size:12px;font-weight:500;
+  color:var(--muted);
+  cursor:pointer;
+  transition:color .2s,background .2s;
+  border-bottom:2px solid transparent;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  letter-spacing:0.02em;
+}
+.tab-btn:hover{color:var(--muted2);background:rgba(0,0,0,0.02)}
+.tab-btn.active{
+  color:var(--text);
+  border-bottom-color:var(--accent);
+  background:var(--surface);
+}
+
+.tab-icon{font-size:13px}
+
+.tabs-content{flex:1;padding:24px;min-height:420px;position:relative}
+
+.tab-pane{display:none;height:100%}
+.tab-pane.active{display:flex;flex-direction:column}
+
+canvas{width:100%!important;max-height:380px}
+
+/* Empty state */
+.empty-state{
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  height:100%;min-height:340px;
+  gap:12px;color:var(--muted);
+  text-align:center;
+}
+.empty-icon{font-size:36px;opacity:.25}
+.empty-text{font-size:13px;line-height:1.6;max-width:280px;color:var(--muted)}
+
+/* Concepts */
+.concepts-grid{
+  display:grid;grid-template-columns:repeat(2,1fr);
+  gap:10px;margin-top:4px;
+}
+.concept-card{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:14px;
+  transition:border-color .2s;
+}
+.concept-card:hover{border-color:var(--border2)}
+.concept-emoji{font-size:17px;margin-bottom:7px}
+.concept-name{font-size:12px;font-weight:600;margin-bottom:3px;color:var(--text)}
+.concept-desc{font-size:11px;color:var(--muted);line-height:1.5}
+
+/* Legend */
+.chart-legend{
+  display:flex;align-items:center;gap:16px;
+  margin-top:12px;flex-wrap:wrap;
+}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* Disclaimer */
+.disclaimer{
+  font-size:10px;font-family:var(--font-mono);
+  color:var(--muted);
+  padding:10px 16px;
+  background:var(--surface2);
+  border-top:1px solid var(--border);
+}
+
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{position:static;height:auto}
+  .stats-bar{grid-template-columns:repeat(2,1fr)}
+  .main{padding:20px}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">
+        <img src="https://clearmindtrader.com/wp-content/uploads/2025/12/cropped-cropped-cropped-Screenshot-2025-12-20-at-17.20.11.png"
+             alt="DATRIX"
+             style="width:36px;height:36px;object-fit:contain;border-radius:4px;"/>
+      </div>
+      <div class="logo-text">
+        <strong>ClearMindTrader</strong>
+        by DATRIX — Simulation · Monte Carlo
+      </div>
+    </div>
+
+    <div class="section-title">Paramètres du compte</div>
+
+    <div class="input-group">
+      <div class="input-row">
+        <label>Capital initial</label>
+        <input type="number" id="capital" value="10000" min="100" max="1000000" step="100"/>
+        <span style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">€</span>
+      </div>
+    </div>
+
+    <div class="section-title">Paramètres de la stratégie</div>
+
+    <div class="input-group">
+      <div class="input-label">
+        <span>Taux de réussite</span>
+        <span class="input-val" id="v-winrate">55%</span>
+      </div>
+      <input type="range" id="winrate" min="20" max="80" value="55" step="1"
+             oninput="document.getElementById('v-winrate').textContent=this.value+'%'"/>
+    </div>
+
+    <div class="input-group">
+      <div class="input-label">
+        <span>Gain moyen par trade</span>
+        <span class="input-val" id="v-gain">+1.5%</span>
+      </div>
+      <input type="range" id="gain" min="0.1" max="5" value="1.5" step="0.1"
+             oninput="document.getElementById('v-gain').textContent='+'+parseFloat(this.value).toFixed(1)+'%'"/>
+    </div>
+
+    <div class="input-group">
+      <div class="input-label">
+        <span>Perte moyenne par trade</span>
+        <span class="input-val" id="v-loss">-1.0%</span>
+      </div>
+      <input type="range" id="loss" min="0.1" max="5" value="1.0" step="0.1"
+             oninput="document.getElementById('v-loss').textContent='-'+parseFloat(this.value).toFixed(1)+'%'"/>
+    </div>
+
+    <div class="input-group">
+      <div class="input-label">
+        <span>Nombre de trades</span>
+        <span class="input-val" id="v-trades">100</span>
+      </div>
+      <input type="range" id="trades" min="10" max="500" value="100" step="10"
+             oninput="document.getElementById('v-trades').textContent=this.value"/>
+    </div>
+
+    <div class="input-group">
+      <div class="input-label">
+        <span>Nombre de simulations</span>
+        <span class="input-val" id="v-sims">1000</span>
+      </div>
+      <input type="range" id="sims" min="100" max="1000" value="1000" step="100"
+             oninput="document.getElementById('v-sims').textContent=this.value"/>
+    </div>
+
+    <div class="section-title">Seuil de ruine</div>
+
+    <div class="ruin-group">
+      <div class="ruin-title">Arrêt automatique si capital ≤</div>
+      <div class="input-group" style="margin-bottom:0">
+        <div class="input-label">
+          <span style="font-size:11px;color:var(--muted2)">% du capital initial</span>
+          <span class="input-val" id="v-ruin" style="color:var(--accent2);border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.08)">10%</span>
+        </div>
+        <input type="range" id="ruin" min="0" max="50" value="10" step="5"
+               oninput="document.getElementById('v-ruin').textContent=this.value+'%'"
+               style="background:rgba(239,68,68,0.2)"/>
+      </div>
+    </div>
+
+    <button class="btn-run" id="btn-run" onclick="runSimulation()">
+      ▶ Lancer la simulation
+    </button>
+
+    <div class="loading" id="loading">
+      <div class="spin"></div>
+      <span id="loading-text">Initialisation de Python…</span>
+    </div>
+  </aside>
+
+  <!-- ══ MAIN ══ -->
+  <main class="main">
+
+    <div class="main-header">
+      <div>
+        <h1 class="main-title">Trajectoires<br>Possibles</h1>
+        <p class="main-subtitle">
+          Même stratégie, résultats opposés. Explorez comment l'aléatoire
+          crée des destins radicalement différents à partir de règles identiques.
+        </p>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-bar">
+      <div class="stat-card green">
+        <div class="stat-label">Capital médian final</div>
+        <div class="stat-value" id="s-median">—</div>
+        <div class="stat-sub" id="s-median-pct">Lancez la simulation</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">Taux de ruine</div>
+        <div class="stat-value" id="s-ruin">—</div>
+        <div class="stat-sub" id="s-ruin-n">des trajectoires</div>
+      </div>
+      <div class="stat-card amber">
+        <div class="stat-label">Meilleur résultat</div>
+        <div class="stat-value" id="s-best">—</div>
+        <div class="stat-sub" id="s-best-pct">Performance max</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">Pire résultat</div>
+        <div class="stat-value" id="s-worst">—</div>
+        <div class="stat-sub" id="s-worst-pct">Performance min</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-wrapper">
+      <nav class="tabs-nav">
+        <button class="tab-btn active" onclick="switchTab('trajectoires',this)">
+          <span class="tab-icon">〰️</span> Toutes les trajectoires
+        </button>
+        <button class="tab-btn" onclick="switchTab('percentiles',this)">
+          <span class="tab-icon">📊</span> Zones de percentiles
+        </button>
+        <button class="tab-btn" onclick="switchTab('distribution',this)">
+          <span class="tab-icon">🔔</span> Distribution finale
+        </button>
+      </nav>
+
+      <div class="tabs-content">
+
+        <!-- Tab 1 : Toutes trajectoires -->
+        <div class="tab-pane active" id="tab-trajectoires">
+          <div class="empty-state" id="empty-traj">
+            <div class="empty-icon">〰️</div>
+            <div class="empty-text">Configurez vos paramètres et lancez la simulation pour voir les 1000 trajectoires possibles</div>
+          </div>
+          <canvas id="chart-traj" style="display:none"></canvas>
+          <div class="chart-legend" id="legend-traj" style="display:none">
+            <div class="legend-item"><div class="legend-dot" style="background:#1d3557"></div>Médiane</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#2c6e49"></div>Top 10%</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#c0392b"></div>Ruine</div>
+            <div class="legend-item"><div class="legend-dot" style="background:rgba(90,88,85,0.3)"></div>Autres trajectoires</div>
+          </div>
+        </div>
+
+        <!-- Tab 2 : Percentiles -->
+        <div class="tab-pane" id="tab-percentiles">
+          <div class="empty-state" id="empty-pct">
+            <div class="empty-icon">📊</div>
+            <div class="empty-text">Les zones de percentiles apparaîtront ici après la simulation</div>
+          </div>
+          <canvas id="chart-pct" style="display:none"></canvas>
+          <div class="chart-legend" id="legend-pct" style="display:none">
+            <div class="legend-item"><div class="legend-dot" style="background:#2c6e49"></div>90e percentile</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#1d3557"></div>50e percentile (médiane)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:rgba(29,53,87,0.4)"></div>25e percentile</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#c0392b"></div>10e percentile</div>
+          </div>
+        </div>
+
+        <!-- Tab 3 : Distribution -->
+        <div class="tab-pane" id="tab-distribution">
+          <div class="empty-state" id="empty-dist">
+            <div class="empty-icon">🔔</div>
+            <div class="empty-text">La distribution des capitaux finaux apparaîtra ici après la simulation</div>
+          </div>
+          <canvas id="chart-dist" style="display:none"></canvas>
+        </div>
+
+      </div>
+
+      <!-- Concepts pédagogiques -->
+      <div style="padding:0 24px 20px">
+        <div style="font-size:10px;font-family:var(--font-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:12px;padding-top:16px;border-top:1px solid var(--border)">
+          Ce que cette simulation illustre
+        </div>
+        <div class="concepts-grid">
+          <div class="concept-card">
+            <div class="concept-emoji">🔗</div>
+            <div class="concept-name">Dépendance au sentier</div>
+            <div class="concept-desc">L'ordre des gains et pertes change radicalement le résultat final, même avec la même moyenne.</div>
+          </div>
+          <div class="concept-card">
+            <div class="concept-emoji">📡</div>
+            <div class="concept-name">Dispersion des résultats</div>
+            <div class="concept-desc">Plus on trade longtemps, plus les trajectoires divergent. L'éventail s'élargit avec le temps.</div>
+          </div>
+          <div class="concept-card">
+            <div class="concept-emoji">🧠</div>
+            <div class="concept-name">Pression psychologique</div>
+            <div class="concept-desc">Même les bonnes stratégies traversent des drawdowns sévères. La discipline est non-négociable.</div>
+          </div>
+          <div class="concept-card">
+            <div class="concept-emoji">👁️</div>
+            <div class="concept-name">Illusion de la moyenne</div>
+            <div class="concept-desc">La trajectoire médiane cache des extrêmes opposés. Vous ne vivez qu'une seule trajectoire.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="disclaimer">
+        ⚠️ Outil pédagogique uniquement — Ne constitue pas un conseil financier — Les performances passées ne préjugent pas des résultats futurs
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+let pyodide = null;
+let charts = {};
+let simData = null;
+
+// ── Tab switching ──
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (simData && charts[name]) {
+    setTimeout(() => charts[name].resize(), 50);
+  }
+}
+
+// ── Init Pyodide ──
+async function initPyodide() {
+  const loading = document.getElementById('loading');
+  const btn = document.getElementById('btn-run');
+  const txt = document.getElementById('loading-text');
+  loading.classList.add('show');
+  btn.disabled = true;
+  txt.textContent = 'Chargement de Python…';
+  try {
+    pyodide = await loadPyodide();
+    txt.textContent = 'Python prêt ✓';
+    setTimeout(() => loading.classList.remove('show'), 1200);
+    btn.disabled = false;
+  } catch(e) {
+    txt.textContent = 'Erreur de chargement';
+  }
+}
+
+// ── Run simulation ──
+async function runSimulation() {
+  if (!pyodide) { await initPyodide(); return; }
+
+  const loading = document.getElementById('loading');
+  const btn = document.getElementById('btn-run');
+  const txt = document.getElementById('loading-text');
+
+  loading.classList.add('show');
+  btn.disabled = true;
+  txt.textContent = 'Simulation en cours…';
+
+  const capital  = parseFloat(document.getElementById('capital').value) || 10000;
+  const winrate  = parseFloat(document.getElementById('winrate').value) / 100;
+  const gain     = parseFloat(document.getElementById('gain').value) / 100;
+  const loss     = parseFloat(document.getElementById('loss').value) / 100;
+  const nTrades  = parseInt(document.getElementById('trades').value);
+  const nSims    = parseInt(document.getElementById('sims').value);
+  const ruinPct  = parseFloat(document.getElementById('ruin').value) / 100;
+
+  const code = `
+import random, json
+
+capital  = ${capital}
+winrate  = ${winrate}
+gain     = ${gain}
+loss     = ${loss}
+n_trades = ${nTrades}
+n_sims   = ${nSims}
+ruin_pct = ${ruinPct}
+ruin_lvl = capital * ruin_pct
+
+random.seed(None)
+
+all_paths = []
+finals    = []
+ruined    = 0
+
+for _ in range(n_sims):
+    path = [capital]
+    c    = capital
+    for _ in range(n_trades):
+        if c <= ruin_lvl:
+            ruined += 1
+            path += [c] * (n_trades - len(path) + 1)
+            break
+        if random.random() < winrate:
+            c *= (1 + gain)
+        else:
+            c *= (1 - loss)
+        path.append(round(c, 2))
+    else:
+        finals.append(round(c, 2))
+    all_paths.append(path)
+
+finals_all = [p[-1] for p in all_paths]
+finals_all.sort()
+
+def percentile(lst, p):
+    idx = int(len(lst) * p / 100)
+    return lst[min(idx, len(lst)-1)]
+
+result = {
+    "paths": all_paths[:200],
+    "finals": finals_all,
+    "stats": {
+        "median": round(percentile(finals_all, 50), 2),
+        "p10":    round(percentile(finals_all, 10), 2),
+        "p25":    round(percentile(finals_all, 25), 2),
+        "p75":    round(percentile(finals_all, 75), 2),
+        "p90":    round(percentile(finals_all, 90), 2),
+        "best":   round(max(finals_all), 2),
+        "worst":  round(min(finals_all), 2),
+        "ruined": ruined,
+        "ruin_pct": round(ruined / n_sims * 100, 1),
+        "n_sims": n_sims
+    }
+}
+
+# Percentile paths (step by step)
+n = len(all_paths)
+steps = len(all_paths[0])
+pct_paths = {"p10":[],"p25":[],"p50":[],"p75":[],"p90":[]}
+for s in range(steps):
+    vals = sorted([all_paths[i][s] for i in range(n)])
+    for pname, pp in [("p10",10),("p25",25),("p50",50),("p75",75),("p90",90)]:
+        idx = int(n * pp / 100)
+        pct_paths[pname].append(round(vals[min(idx,n-1)], 2))
+
+result["pct_paths"] = pct_paths
+json.dumps(result)
+`;
+
+  try {
+    const raw = await pyodide.runPythonAsync(code);
+    simData = JSON.parse(raw);
+    renderAll(simData, capital, nTrades);
+    loading.classList.remove('show');
+    btn.disabled = false;
+    txt.textContent = 'Simulation terminée ✓';
+    setTimeout(() => loading.classList.remove('show'), 1500);
+  } catch(e) {
+    txt.textContent = 'Erreur : ' + e.message;
+    btn.disabled = false;
+  }
+}
+
+// ── Render all charts + stats ──
+function renderAll(data, capital, nTrades) {
+  const s = data.stats;
+  const fmt = v => {
+    if (v >= 1e6) return (v/1e6).toFixed(2) + 'M€';
+    if (v >= 1e3) return (v/1e3).toFixed(1) + 'k€';
+    return v.toFixed(0) + '€';
+  };
+  const pct = v => ((v - capital) / capital * 100).toFixed(1) + '%';
+
+  // Stats cards
+  document.getElementById('s-median').textContent    = fmt(s.median);
+  document.getElementById('s-median-pct').textContent = pct(s.median);
+  document.getElementById('s-ruin').textContent      = s.ruin_pct + '%';
+  document.getElementById('s-ruin-n').textContent    = s.ruined + ' / ' + s.n_sims + ' trajectoires';
+  document.getElementById('s-best').textContent      = fmt(s.best);
+  document.getElementById('s-best-pct').textContent  = pct(s.best);
+  document.getElementById('s-worst').textContent     = fmt(s.worst);
+  document.getElementById('s-worst-pct').textContent = pct(s.worst);
+
+  const labels = Array.from({length: nTrades + 1}, (_, i) => i);
+
+  renderTrajectoires(data, capital, labels);
+  renderPercentiles(data, capital, labels);
+  renderDistribution(data, capital);
+}
+
+// ── Chart 1 : Trajectoires ──
+function renderTrajectoires(data, capital, labels) {
+  const canvas = document.getElementById('chart-traj');
+  document.getElementById('empty-traj').style.display = 'none';
+  canvas.style.display = 'block';
+  document.getElementById('legend-traj').style.display = 'flex';
+
+  if (charts.trajectoires) charts.trajectoires.destroy();
+
+  const ruinLvl = capital * (parseFloat(document.getElementById('ruin').value) / 100);
+  const median  = data.stats.median;
+  const p90val  = data.stats.p90;
+
+  const datasets = data.paths.map(path => {
+    const final = path[path.length - 1];
+    const isRuined = final <= ruinLvl * 1.05;
+    const isTop    = final >= p90val;
+    return {
+      data: path,
+      borderColor: isRuined ? 'rgba(192,57,43,0.45)'
+                 : isTop    ? 'rgba(44,110,73,0.45)'
+                 :             'rgba(90,88,85,0.1)',
+      borderWidth: isRuined || isTop ? 1.2 : 0.8,
+      pointRadius: 0,
+      tension: 0.3,
+    };
+  });
+
+  // Median line
+  datasets.push({
+    data: data.pct_paths.p50,
+    borderColor: '#1d3557',
+    borderWidth: 2.5,
+    pointRadius: 0,
+    tension: 0.3,
+    z: 10,
+  });
+
+  charts.trajectoires = new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      animation: { duration: 600 },
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: {
+          ticks: { color: '#8a8880', font: { size: 10, family: 'DM Mono' }, maxTicksLimit: 10 },
+          grid: { color: 'rgba(200,196,188,0.5)' },
+          title: { display: true, text: 'Trades', color: '#8a8880', font: { size: 11 } }
+        },
+        y: {
+          ticks: { color: '#8a8880', font: { size: 10, family: 'DM Mono' },
+                   callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k€' : v+'€' },
+          grid: { color: 'rgba(200,196,188,0.5)' },
+        }
+      }
+    }
+  });
+}
+
+// ── Chart 2 : Percentiles ──
+function renderPercentiles(data, capital, labels) {
+  const canvas = document.getElementById('chart-pct');
+  document.getElementById('empty-pct').style.display = 'none';
+  canvas.style.display = 'block';
+  document.getElementById('legend-pct').style.display = 'flex';
+
+  if (charts.percentiles) charts.percentiles.destroy();
+
+  const pp = data.pct_paths;
+
+  charts.percentiles = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: '90e percentile', data: pp.p90, borderColor: '#2c6e49', borderWidth: 2, pointRadius: 0, tension: 0.3, fill: false },
+        { label: '75e percentile', data: pp.p75, borderColor: 'rgba(44,110,73,0.3)', borderWidth: 1, pointRadius: 0, tension: 0.3, fill: '+1', backgroundColor: 'rgba(44,110,73,0.05)' },
+        { label: '50e percentile', data: pp.p50, borderColor: '#1d3557', borderWidth: 2.5, pointRadius: 0, tension: 0.3, fill: false },
+        { label: '25e percentile', data: pp.p25, borderColor: 'rgba(29,53,87,0.4)', borderWidth: 1, pointRadius: 0, tension: 0.3, fill: false },
+        { label: '10e percentile', data: pp.p10, borderColor: '#c0392b', borderWidth: 2, pointRadius: 0, tension: 0.3, fill: false },
+      ]
+    },
+    options: {
+      animation: { duration: 600 },
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'index', intersect: false,
+          backgroundColor: '#fff',
+          borderColor: '#e2dfd8', borderWidth: 1,
+          titleColor: '#8a8880', bodyColor: '#1a1a1a',
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw >= 1000 ? (ctx.raw/1000).toFixed(1)+'k€' : ctx.raw+'€'}` }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#8a8880', font: { size: 10, family: 'DM Mono' }, maxTicksLimit: 10 }, grid: { color: 'rgba(200,196,188,0.5)' } },
+        y: { ticks: { color: '#8a8880', font: { size: 10, family: 'DM Mono' }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k€' : v+'€' }, grid: { color: 'rgba(200,196,188,0.5)' } }
+      }
+    }
+  });
+}
+
+// ── Chart 3 : Distribution ──
+function renderDistribution(data, capital) {
+  const canvas = document.getElementById('chart-dist');
+  document.getElementById('empty-dist').style.display = 'none';
+  canvas.style.display = 'block';
+
+  if (charts.distribution) charts.distribution.destroy();
+
+  const finals = data.finals;
+  const min = Math.min(...finals);
+  const max = Math.max(...finals);
+  const bins = 40;
+  const step = (max - min) / bins;
+  const counts = new Array(bins).fill(0);
+  finals.forEach(v => {
+    const i = Math.min(Math.floor((v - min) / step), bins - 1);
+    counts[i]++;
+  });
+  const binLabels = counts.map((_, i) => {
+    const v = min + i * step;
+    return v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toFixed(0);
+  });
+
+  const medianIdx = Math.floor((data.stats.median - min) / step);
+
+  charts.distribution = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: binLabels,
+      datasets: [{
+        data: counts,
+        backgroundColor: counts.map((_, i) =>
+          i < medianIdx ? 'rgba(192,57,43,0.35)' : 'rgba(44,110,73,0.35)'
+        ),
+        borderColor: counts.map((_, i) =>
+          i < medianIdx ? 'rgba(192,57,43,0.7)' : 'rgba(44,110,73,0.7)'
+        ),
+        borderWidth: 1,
+        borderRadius: 2,
+      }]
+    },
+    options: {
+      animation: { duration: 600 },
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#fff', borderColor: '#e2dfd8', borderWidth: 1,
+          titleColor: '#8a8880', bodyColor: '#1a1a1a',
+          callbacks: {
+            title: ctx => 'Capital final : ' + ctx[0].label + '€',
+            label: ctx => ' Fréquence : ' + ctx.raw + ' trajectoires'
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#8a8880', font: { size: 9, family: 'DM Mono' }, maxTicksLimit: 12 }, grid: { display: false } },
+        y: { ticks: { color: '#8a8880', font: { size: 10, family: 'DM Mono' } }, grid: { color: 'rgba(200,196,188,0.5)' }, title: { display: true, text: 'Fréquence', color: '#8a8880', font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// Init on load
+window.addEventListener('load', initPyodide);
+</script>
+</body>
+</html>
