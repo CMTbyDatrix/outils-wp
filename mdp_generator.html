@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Générateur de Mot de Passe</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #13131a;
+      --border: #2a2a3a;
+      --accent: #00e5ff;
+      --accent2: #7b2fff;
+      --text: #e8e8f0;
+      --muted: #6b6b80;
+      --success: #00ff9d;
+      --font-display: 'Syne', sans-serif;
+      --font-mono: 'Space Mono', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-display);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      overflow-x: hidden;
+    }
+
+    /* Animated background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Glowing orbs */
+    body::after {
+      content: '';
+      position: fixed;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(123,47,255,0.08) 0%, transparent 70%);
+      top: -200px; right: -200px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .card {
+      position: relative;
+      z-index: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px;
+      width: 100%;
+      max-width: 520px;
+      box-shadow:
+        0 0 0 1px rgba(0,229,255,0.05),
+        0 40px 80px rgba(0,0,0,0.6),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    /* Corner accent */
+    .card::before {
+      content: '';
+      position: absolute;
+      top: -1px; left: 30px;
+      width: 80px; height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 2px;
+    }
+
+    .header {
+      margin-bottom: 36px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,229,255,0.08);
+      border: 1px solid rgba(0,229,255,0.2);
+      border-radius: 100px;
+      padding: 4px 12px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--accent);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #fff 40%, var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    /* Slider */
+    .slider-group {
+      margin-bottom: 28px;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .slider-label span:first-child {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+
+    .slider-value {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--accent);
+      background: rgba(0,229,255,0.08);
+      border: 1px solid rgba(0,229,255,0.2);
+      padding: 2px 10px;
+      border-radius: 6px;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 4px;
+      background: var(--border);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(0,229,255,0.5);
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 20px rgba(0,229,255,0.8);
+    }
+
+    /* Checkboxes */
+    .options-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    .option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      user-select: none;
+    }
+
+    .option:hover {
+      border-color: rgba(0,229,255,0.3);
+      background: rgba(0,229,255,0.04);
+    }
+
+    .option.active {
+      border-color: rgba(0,229,255,0.4);
+      background: rgba(0,229,255,0.06);
+    }
+
+    .option input[type="checkbox"] { display: none; }
+
+    .checkbox-box {
+      width: 18px; height: 18px;
+      border-radius: 5px;
+      border: 1.5px solid var(--muted);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+
+    .option.active .checkbox-box {
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 10px rgba(0,229,255,0.4);
+    }
+
+    .checkbox-box::after {
+      content: '✓';
+      font-size: 11px;
+      color: #000;
+      opacity: 0;
+      transform: scale(0);
+      transition: all 0.15s;
+    }
+
+    .option.active .checkbox-box::after {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .option-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 24px 0;
+    }
+
+    /* Button */
+    .btn-generate {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      color: #000;
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 4px 20px rgba(0,229,255,0.2);
+    }
+
+    .btn-generate:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,229,255,0.35);
+    }
+
+    .btn-generate:active { transform: translateY(0); }
+
+    .btn-generate:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Loading */
+    .loading-bar {
+      display: none;
+      margin-bottom: 20px;
+      background: rgba(0,229,255,0.06);
+      border: 1px solid rgba(0,229,255,0.15);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent);
+    }
+
+    .loading-bar.visible { display: flex; align-items: center; gap: 10px; }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(0,229,255,0.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Results */
+    .results {
+      margin-top: 24px;
+      display: none;
+    }
+
+    .results.visible { display: block; }
+
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .results-title {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .results-count {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--success);
+    }
+
+    .password-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 8px;
+      gap: 12px;
+      animation: slideIn 0.3s ease forwards;
+      opacity: 0;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .password-text {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--success);
+      letter-spacing: 0.05em;
+      word-break: break-all;
+      flex: 1;
+    }
+
+    .copy-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 10px;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .copy-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .copy-btn.copied {
+      border-color: var(--success);
+      color: var(--success);
+    }
+
+    .error-msg {
+      background: rgba(255,80,80,0.08);
+      border: 1px solid rgba(255,80,80,0.3);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #ff8080;
+      margin-top: 16px;
+      display: none;
+    }
+
+    .error-msg.visible { display: block; }
+
+    /* Footer */
+    .footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-text {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+
+    .python-badge {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .python-badge span {
+      color: #ffd43b;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+
+    <div class="header">
+      <div class="badge">Outil interactif</div>
+      <h1>Générateur de<br>Mot de Passe</h1>
+      <p class="subtitle">Créez des mots de passe sécurisés instantanément</p>
+    </div>
+
+    <!-- Slider longueur -->
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>Longueur du mot de passe</span>
+        <span class="slider-value" id="val-longueur">25</span>
+      </div>
+      <input type="range" id="longueur" min="6" max="32" value="25"
+             oninput="document.getElementById('val-longueur').textContent = this.value"/>
+    </div>
+
+    <!-- Slider nombre -->
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>Nombre de mots de passe</span>
+        <span class="slider-value" id="val-nombre">5</span>
+      </div>
+      <input type="range" id="nombre" min="1" max="8" value="5"
+             oninput="document.getElementById('val-nombre').textContent = this.value"/>
+    </div>
+
+    <!-- Checkboxes -->
+    <div class="options-grid">
+      <label class="option active" id="opt-maj" onclick="toggleOption(this)">
+        <input type="checkbox" id="majuscules" checked/>
+        <div class="checkbox-box"></div>
+        <span class="option-label">Majuscules</span>
+      </label>
+      <label class="option active" id="opt-chif" onclick="toggleOption(this)">
+        <input type="checkbox" id="chiffres" checked/>
+        <div class="checkbox-box"></div>
+        <span class="option-label">Chiffres</span>
+      </label>
+      <label class="option active" id="opt-spec" onclick="toggleOption(this)">
+        <input type="checkbox" id="speciaux" checked/>
+        <div class="checkbox-box"></div>
+        <span class="option-label">Symboles</span>
+      </label>
+      <label class="option" id="opt-amb" onclick="toggleOption(this)">
+        <input type="checkbox" id="ambigus"/>
+        <div class="checkbox-box"></div>
+        <span class="option-label">Sans ambigus</span>
+      </label>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Loading -->
+    <div class="loading-bar" id="loading">
+      <div class="spinner"></div>
+      <span id="loading-text">Chargement de Python…</span>
+    </div>
+
+    <!-- Bouton -->
+    <button class="btn-generate" id="btn" onclick="generer()">
+      🔐 Générer les mots de passe
+    </button>
+
+    <!-- Erreur -->
+    <div class="error-msg" id="error"></div>
+
+    <!-- Résultats -->
+    <div class="results" id="results">
+      <div class="results-header">
+        <span class="results-title">Résultats</span>
+        <span class="results-count" id="results-count"></span>
+      </div>
+      <div id="passwords-list"></div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <span class="footer-text">100% local — aucune donnée envoyée</span>
+      <span class="python-badge">Propulsé par <span>Python</span> + Pyodide</span>
+    </div>
+
+  </div>
+
+  <script>
+    let pyodide = null;
+
+    function toggleOption(label) {
+      const cb = label.querySelector('input[type="checkbox"]');
+      cb.checked = !cb.checked;
+      label.classList.toggle('active', cb.checked);
+    }
+
+    async function initPyodide() {
+      const loading = document.getElementById('loading');
+      const btn = document.getElementById('btn');
+      const loadingText = document.getElementById('loading-text');
+
+      loading.classList.add('visible');
+      btn.disabled = true;
+      loadingText.textContent = 'Chargement de Python…';
+
+      try {
+        pyodide = await loadPyodide();
+        loadingText.textContent = 'Python prêt ✓';
+        setTimeout(() => loading.classList.remove('visible'), 1000);
+        btn.disabled = false;
+      } catch (e) {
+        loadingText.textContent = 'Erreur de chargement';
+      }
+    }
+
+    async function generer() {
+      const errorEl = document.getElementById('error');
+      errorEl.classList.remove('visible');
+
+      if (!pyodide) {
+        await initPyodide();
+        return;
+      }
+
+      const longueur = parseInt(document.getElementById('longueur').value);
+      const nombre   = parseInt(document.getElementById('nombre').value);
+      const majuscules = document.getElementById('majuscules').checked;
+      const chiffres   = document.getElementById('chiffres').checked;
+      const speciaux   = document.getElementById('speciaux').checked;
+      const ambigus    = document.getElementById('ambigus').checked;
+
+      const code = `
+import random, string
+
+longueur   = ${longueur}
+nombre     = ${nombre}
+majuscules = ${majuscules ? 'True' : 'False'}
+chiffres   = ${chiffres  ? 'True' : 'False'}
+speciaux   = ${speciaux  ? 'True' : 'False'}
+ambigus    = ${ambigus   ? 'True' : 'False'}
+
+caracteres = string.ascii_lowercase
+if majuscules: caracteres += string.ascii_uppercase
+if chiffres:   caracteres += string.digits
+if speciaux:   caracteres += "!@#$%^&*()_+-=[]{};:,./<>?"
+if ambigus:
+    for c in "0O1lI|": caracteres = caracteres.replace(c, "")
+
+if not caracteres:
+    raise ValueError("Coche au moins une option !")
+
+mdps = [''.join(random.choice(caracteres) for _ in range(longueur)) for _ in range(nombre)]
+"\\n".join(mdps)
+`;
+
+      try {
+        const result = await pyodide.runPythonAsync(code);
+        afficherResultats(result.split('\n'), longueur);
+      } catch (e) {
+        errorEl.textContent = '⚠️ ' + e.message;
+        errorEl.classList.add('visible');
+      }
+    }
+
+    function afficherResultats(passwords, longueur) {
+      const resultsEl  = document.getElementById('results');
+      const listEl     = document.getElementById('passwords-list');
+      const countEl    = document.getElementById('results-count');
+
+      listEl.innerHTML = '';
+      countEl.textContent = `${passwords.length} généré(s) · ${longueur} caractères`;
+
+      passwords.forEach((mdp, i) => {
+        const item = document.createElement('div');
+        item.className = 'password-item';
+        item.style.animationDelay = `${i * 60}ms`;
+        item.innerHTML = `
+          <span class="password-text">${mdp}</span>
+          <button class="copy-btn" onclick="copier(this, '${mdp}')">copier</button>
+        `;
+        listEl.appendChild(item);
+      });
+
+      resultsEl.classList.add('visible');
+    }
+
+    function copier(btn, mdp) {
+      navigator.clipboard.writeText(mdp).then(() => {
+        btn.textContent = '✓ copié';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'copier';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    // Initialise Pyodide au chargement
+    window.addEventListener('load', initPyodide);
+  </script>
+</body>
+</html>
