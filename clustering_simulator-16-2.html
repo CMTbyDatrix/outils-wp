@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Simulateur de Clustering — ClearMindTrader by DATRIX</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f7f6f3;--surface:#ffffff;--surface2:#f0efe9;
+  --border:#e2dfd8;--border2:#ccc9c0;
+  --accent:#1a1a1a;--accent2:#c0392b;--accent3:#2c6e49;
+  --blue:#1d3557;--amber:#92600a;
+  --colA:#1d3557;--colB:#2c6e49;--colC:#c0392b;
+  --text:#1a1a1a;--muted:#8a8880;--muted2:#5c5a55;
+  --font-display:'Inter',sans-serif;
+  --font-serif:'Lora',serif;
+  --font-mono:'DM Mono',monospace;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font-display);min-height:100vh;overflow-x:hidden;}
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(26,26,26,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(26,26,26,0.03) 1px,transparent 1px);
+  background-size:32px 32px;pointer-events:none;z-index:0;
+}
+.layout{display:grid;grid-template-columns:340px 1fr;min-height:100vh;position:relative;z-index:1;}
+
+/* ── SIDEBAR ── */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);padding:32px 24px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;}
+.sidebar::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border);}
+.logo-icon{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
+.logo-text{font-size:11px;font-weight:500;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;line-height:1.4;}
+.logo-text strong{color:var(--text);display:block;font-size:13px;font-weight:600;letter-spacing:0.02em}
+
+.section-title{font-size:10px;font-family:var(--font-mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.15em;margin:22px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+
+.input-group{margin-bottom:16px}
+.input-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;}
+.input-label span:first-child{font-size:12px;font-weight:500;color:var(--muted2);}
+.input-val{font-family:var(--font-mono);font-size:12px;color:var(--blue);background:rgba(29,53,87,0.06);border:1px solid rgba(29,53,87,0.15);padding:2px 8px;border-radius:4px;min-width:52px;text-align:right;}
+
+input[type=range]{-webkit-appearance:none;width:100%;height:3px;background:var(--border2);border-radius:3px;outline:none;cursor:pointer;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,0.2);cursor:pointer;transition:transform .15s;}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
+
+.input-row{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;transition:border-color .2s;}
+.input-row:focus-within{border-color:var(--accent)}
+.input-row label{font-size:11px;color:var(--muted);font-family:var(--font-mono);white-space:nowrap;}
+.input-row input[type=number]{background:none;border:none;outline:none;color:var(--text);font-family:var(--font-mono);font-size:13px;font-weight:500;width:100%;text-align:right;}
+.input-row input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+
+/* Trajectoire toggles */
+.traj-toggles{display:flex;flex-direction:column;gap:8px;margin-top:4px;}
+.traj-toggle{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 14px;border-radius:6px;cursor:pointer;
+  border:1px solid var(--border);background:var(--surface2);
+  transition:all .2s;user-select:none;
+}
+.traj-toggle:hover{border-color:var(--border2)}
+.traj-toggle.active-A{border-color:rgba(29,53,87,0.5);background:rgba(29,53,87,0.05);}
+.traj-toggle.active-B{border-color:rgba(44,110,73,0.5);background:rgba(44,110,73,0.05);}
+.traj-toggle.active-C{border-color:rgba(192,57,43,0.5);background:rgba(192,57,43,0.05);}
+.traj-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.traj-dot.A{background:var(--colA)}
+.traj-dot.B{background:var(--colB)}
+.traj-dot.C{background:var(--colC)}
+.traj-info{flex:1}
+.traj-name{font-size:12px;font-weight:600;color:var(--text)}
+.traj-desc{font-size:10px;color:var(--muted);margin-top:1px;font-family:var(--font-mono);}
+.traj-check{font-size:13px;color:var(--muted);transition:color .2s;}
+.traj-toggle.active-A .traj-check,.traj-toggle.active-B .traj-check,.traj-toggle.active-C .traj-check{color:var(--accent)}
+
+/* Hypothèses */
+.hyp-box{
+  background:rgba(29,53,87,0.04);border:1px solid rgba(29,53,87,0.12);
+  border-radius:6px;padding:12px 14px;margin-top:4px;
+}
+.hyp-title{font-size:10px;font-family:var(--font-mono);color:var(--blue);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;}
+.hyp-item{font-size:11px;color:var(--muted2);line-height:1.5;display:flex;gap:6px;margin-bottom:3px;}
+.hyp-item::before{content:'—';color:var(--muted);flex-shrink:0;}
+.hyp-limit{
+  background:rgba(146,96,10,0.04);border:1px solid rgba(146,96,10,0.12);
+  border-radius:6px;padding:10px 14px;margin-top:8px;
+}
+.hyp-limit-title{font-size:10px;font-family:var(--font-mono);color:var(--amber);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}
+
+.btn-run{width:100%;padding:13px;margin-top:20px;border:none;border-radius:6px;background:var(--accent);color:#fff;font-family:var(--font-display);font-size:13px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;transition:transform .15s,box-shadow .15s;box-shadow:0 2px 8px rgba(0,0,0,0.15);}
+.btn-run:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,0.2);}
+.btn-run:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+.loading{display:none;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;background:rgba(29,53,87,0.05);border:1px solid rgba(29,53,87,0.12);border-radius:6px;font-family:var(--font-mono);font-size:11px;color:var(--blue);}
+.loading.show{display:flex}
+.spin{width:12px;height:12px;border:2px solid rgba(29,53,87,0.15);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── MAIN ── */
+.main{display:flex;flex-direction:column;padding:32px;gap:24px;overflow:hidden;}
+.main-header{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;padding-bottom:20px;border-bottom:1px solid var(--border);}
+.main-title{font-family:var(--font-serif);font-size:30px;font-weight:600;line-height:1.2;letter-spacing:-0.01em;color:var(--text);}
+.main-subtitle{font-size:13px;color:var(--muted2);margin-top:6px;font-weight:400;max-width:520px;line-height:1.6;}
+
+/* Métriques communes */
+.metrics-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.metric-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;position:relative;overflow:hidden;}
+.metric-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.metric-card.red::before{background:var(--accent2)}
+.metric-card.blue::before{background:var(--blue)}
+.metric-card.amber::before{background:var(--amber)}
+.metric-card.grey::before{background:var(--muted)}
+.metric-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(29,53,87,0.07);border:1px solid rgba(29,53,87,0.12);border-radius:100px;padding:2px 8px;font-size:10px;font-family:var(--font-mono);color:var(--blue);margin-bottom:8px;letter-spacing:.05em;}
+.metric-label{font-size:10px;font-family:var(--font-mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;}
+.metric-value{font-size:19px;font-weight:600;font-family:var(--font-mono);line-height:1;}
+.metric-card.red   .metric-value{color:var(--accent2)}
+.metric-card.blue  .metric-value{color:var(--blue)}
+.metric-card.amber .metric-value{color:var(--amber)}
+.metric-card.grey  .metric-value{color:var(--muted2)}
+.metric-sub{font-size:10px;color:var(--muted);margin-top:3px;font-family:var(--font-mono);}
+
+/* Shared badge */
+.shared-badge{
+  display:flex;align-items:center;gap:6px;
+  background:rgba(44,110,73,0.06);border:1px solid rgba(44,110,73,0.18);
+  border-radius:6px;padding:8px 14px;margin-bottom:4px;
+  font-size:11px;font-family:var(--font-mono);color:var(--accent3);
+}
+.shared-badge::before{content:'=';font-weight:700;font-size:13px;}
+
+/* Chart wrapper */
+.chart-wrapper{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;overflow:hidden;flex:1;display:flex;flex-direction:column;
+}
+.chart-header{
+  padding:18px 24px 0;
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+}
+.chart-title{font-size:13px;font-weight:600;color:var(--text);letter-spacing:.01em;}
+.chart-legend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-family:var(--font-mono);}
+.legend-line{width:20px;height:2px;flex-shrink:0;border-radius:2px;}
+
+/* Tabs */
+.tabs-nav{display:flex;border-bottom:1px solid var(--border);background:var(--surface2);}
+.tab-btn{flex:1;padding:11px 14px;background:none;border:none;font-family:var(--font-display);font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;transition:color .2s,background .2s;border-bottom:2px solid transparent;display:flex;align-items:center;justify-content:center;gap:6px;letter-spacing:0.02em;}
+.tab-btn:hover{color:var(--muted2);background:rgba(0,0,0,0.02)}
+.tab-btn.active{color:var(--text);border-bottom-color:var(--accent);background:var(--surface);}
+.tabs-content{flex:1;padding:20px 24px;min-height:380px;}
+.tab-pane{display:none;height:100%}
+.tab-pane.active{display:flex;flex-direction:column}
+canvas{width:100%!important;max-height:360px}
+
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:320px;gap:12px;text-align:center;}
+.empty-icon{font-size:34px;opacity:.2}
+.empty-text{font-size:13px;line-height:1.6;max-width:300px;color:var(--muted)}
+
+/* Annotation clusters */
+.cluster-annotations{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.cluster-tag{
+  font-size:10px;font-family:var(--font-mono);
+  padding:3px 10px;border-radius:100px;
+  border:1px solid;letter-spacing:.05em;
+}
+.cluster-tag.A{color:var(--colA);border-color:rgba(29,53,87,0.3);background:rgba(29,53,87,0.05);}
+.cluster-tag.B{color:var(--colB);border-color:rgba(44,110,73,0.3);background:rgba(44,110,73,0.05);}
+.cluster-tag.C{color:var(--colC);border-color:rgba(192,57,43,0.3);background:rgba(192,57,43,0.05);}
+
+/* Insights */
+.insights-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.insight-card{background:var(--surface2);border:1px solid var(--border);border-left:3px solid;border-radius:6px;padding:14px;}
+.insight-card.A{border-left-color:var(--colA)}
+.insight-card.B{border-left-color:var(--colB)}
+.insight-card.C{border-left-color:var(--colC)}
+.insight-traj{font-size:10px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px;}
+.insight-card.A .insight-traj{color:var(--colA)}
+.insight-card.B .insight-traj{color:var(--colB)}
+.insight-card.C .insight-traj{color:var(--colC)}
+.insight-title{font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.insight-desc{font-size:11px;color:var(--muted);line-height:1.5;}
+
+.disclaimer{font-size:10px;font-family:var(--font-mono);color:var(--muted);padding:10px 16px;background:var(--surface2);border-top:1px solid var(--border);}
+
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{position:static;height:auto}
+  .metrics-bar{grid-template-columns:repeat(2,1fr)}
+  .insights-row{grid-template-columns:1fr}
+  .main{padding:20px}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">
+        <img src="https://clearmindtrader.com/wp-content/uploads/2025/12/cropped-cropped-cropped-Screenshot-2025-12-20-at-17.20.11.png"
+             alt="DATRIX" style="width:36px;height:36px;object-fit:contain;border-radius:4px;"/>
+      </div>
+      <div class="logo-text">
+        <strong>ClearMindTrader</strong>
+        by DATRIX — Simulation · Clustering
+      </div>
+    </div>
+
+    <div class="section-title">Paramètres communs</div>
+    <p style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:12px;">Ces paramètres sont <strong style="color:var(--text)">identiques</strong> entre les 3 trajectoires. Seule la distribution temporelle des pertes varie.</p>
+
+    <div class="input-group">
+      <div class="input-row">
+        <label>Capital initial</label>
+        <input type="number" id="capital" value="10000" min="1000" max="1000000" step="1000"/>
+        <span style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">€</span>
+      </div>
+    </div>
+
+    <div class="input-group">
+      <div class="input-label">
+        <span>Drawdown cible (MaxDD)</span>
+        <span class="input-val" id="v-maxdd">-18%</span>
+      </div>
+      <input type="range" id="maxdd" min="5" max="40" value="18" step="1"
+             oninput="document.getElementById('v-maxdd').textContent='-'+this.value+'%'"/>
+    </div>
+
+    <div class="input-group">
+      <div class="input-label">
+        <span>Nombre de semaines</span>
+        <span class="input-val" id="v-weeks">8</span>
+      </div>
+      <input type="range" id="weeks" min="8" max="20" value="8" step="1"
+             oninput="document.getElementById('v-weeks').textContent=this.value"/>
+    </div>
+
+    <div class="input-group">
+      <div class="input-label">
+        <span>Trades par semaine</span>
+        <span class="input-val" id="v-tpw">5</span>
+      </div>
+      <input type="range" id="tpw" min="3" max="10" value="5" step="1"
+             oninput="document.getElementById('v-tpw').textContent=this.value"/>
+    </div>
+
+    <div class="input-group">
+      <div class="input-label">
+        <span>Espérance par trade</span>
+        <span class="input-val" id="v-edge">+0.3%</span>
+      </div>
+      <input type="range" id="edge" min="0.1" max="0.9" value="0.3" step="0.1"
+             oninput="document.getElementById('v-edge').textContent='+'+parseFloat(this.value).toFixed(1)+'%'"/>
+      <div style="font-size:10px;color:var(--muted);font-family:var(--font-mono);margin-top:5px;text-align:right;">contrainte : 0,1% – 0,9% par trade</div>
+    </div>
+
+    <div class="section-title">Trajectoires à afficher</div>
+
+    <div class="traj-toggles">
+      <div class="traj-toggle active-A" id="toggle-A" onclick="toggleTraj('A')">
+        <div class="traj-dot A"></div>
+        <div class="traj-info">
+          <div class="traj-name">Trajectoire A</div>
+          <div class="traj-desc">Distribution uniforme</div>
+        </div>
+        <span class="traj-check" id="check-A">✓</span>
+      </div>
+      <div class="traj-toggle active-B" id="toggle-B" onclick="toggleTraj('B')">
+        <div class="traj-dot B"></div>
+        <div class="traj-info">
+          <div class="traj-name">Trajectoire B</div>
+          <div class="traj-desc">2 clusters modérés</div>
+        </div>
+        <span class="traj-check" id="check-B">✓</span>
+      </div>
+      <div class="traj-toggle active-C" id="toggle-C" onclick="toggleTraj('C')">
+        <div class="traj-dot C"></div>
+        <div class="traj-info">
+          <div class="traj-name">Trajectoire C</div>
+          <div class="traj-desc">Cluster dense final</div>
+        </div>
+        <span class="traj-check" id="check-C">✓</span>
+      </div>
+    </div>
+
+    <div class="section-title">Hypothèses du modèle</div>
+    <div class="hyp-box">
+      <div class="hyp-title">Retenues</div>
+      <div class="hyp-item">Distributions normales</div>
+      <div class="hyp-item">Pas de corrélation inter-périodes</div>
+      <div class="hyp-item">MaxDD normalisé identique</div>
+    </div>
+    <div class="hyp-limit">
+      <div class="hyp-limit-title">Limites</div>
+      <div class="hyp-item" style="color:var(--amber)">Queues épaisses non modélisées</div>
+      <div class="hyp-item" style="color:var(--amber)">Corrélations de marché absentes</div>
+    </div>
+
+    <button class="btn-run" id="btn-run" onclick="runSimulation()">
+      ▶ Simuler les 3 trajectoires
+    </button>
+    <div class="loading" id="loading">
+      <div class="spin"></div>
+      <span id="loading-text">Initialisation de Python…</span>
+    </div>
+  </aside>
+
+  <!-- ══ MAIN ══ -->
+  <main class="main">
+
+    <div class="main-header">
+      <div>
+        <h1 class="main-title">Effet du<br>Clustering</h1>
+        <p class="main-subtitle">
+          Trois trajectoires. Mêmes métriques. Trois expériences psychologiques radicalement différentes.
+          La variable isolée : la distribution temporelle des pertes.
+        </p>
+      </div>
+    </div>
+
+    <!-- Badge métriques partagées -->
+    <div class="shared-badge">
+      Paramètres identiques entre A, B et C — MaxDD · Durée · Espérance · Capital initial
+    </div>
+
+    <!-- Métriques communes -->
+    <div class="metrics-bar">
+      <div class="metric-card red">
+        <div class="metric-label">MaxDD garanti</div>
+        <div class="metric-value" id="m-maxdd">—</div>
+        <div class="metric-sub" id="m-maxdd-sub">identique · A · B · C</div>
+      </div>
+      <div class="metric-card blue">
+        <div class="metric-label">Durée totale</div>
+        <div class="metric-value" id="m-duration">—</div>
+        <div class="metric-sub" id="m-duration-sub">identique</div>
+      </div>
+      <div class="metric-card amber">
+        <div class="metric-label">Espérance / trade</div>
+        <div class="metric-value" id="m-edge">—</div>
+        <div class="metric-sub" id="m-edge-sub">RRR 1:2.5 · WR <span id="m-wr">—</span></div>
+      </div>
+      <div class="metric-card grey">
+        <div class="metric-label">Capital final</div>
+        <div class="metric-value" id="m-final">—</div>
+        <div class="metric-sub" id="m-final-sub">A · B · C</div>
+      </div>
+    </div>
+
+    <!-- Chart tabs -->
+    <div class="chart-wrapper">
+      <nav class="tabs-nav">
+        <button class="tab-btn active" onclick="switchTab('capital',this)">
+          <span>📈</span> Courbes de capital
+        </button>
+        <button class="tab-btn" onclick="switchTab('drawdown',this)">
+          <span>📉</span> Profondeur drawdown
+        </button>
+        <button class="tab-btn" onclick="switchTab('perweek',this)">
+          <span>📊</span> P&L par semaine
+        </button>
+      </nav>
+
+      <div class="tabs-content">
+
+        <!-- Tab 1 -->
+        <div class="tab-pane active" id="tab-capital">
+          <div class="empty-state" id="empty-capital">
+            <div class="empty-icon">📈</div>
+            <div class="empty-text">Configurez les paramètres et lancez la simulation pour voir les 3 trajectoires superposées</div>
+          </div>
+          <canvas id="chart-capital" style="display:none"></canvas>
+          <div class="cluster-annotations" id="annot-capital" style="display:none"></div>
+        </div>
+
+        <!-- Tab 2 -->
+        <div class="tab-pane" id="tab-drawdown">
+          <div class="empty-state" id="empty-drawdown">
+            <div class="empty-icon">📉</div>
+            <div class="empty-text">La profondeur du drawdown des 3 trajectoires apparaîtra ici</div>
+          </div>
+          <canvas id="chart-drawdown" style="display:none"></canvas>
+          <div class="cluster-annotations" id="annot-drawdown" style="display:none"></div>
+        </div>
+
+        <!-- Tab 3 -->
+        <div class="tab-pane" id="tab-perweek">
+          <div class="empty-state" id="empty-perweek">
+            <div class="empty-icon">📊</div>
+            <div class="empty-text">Le P&L hebdomadaire des 3 trajectoires apparaîtra ici</div>
+          </div>
+          <canvas id="chart-perweek" style="display:none"></canvas>
+        </div>
+
+      </div>
+
+      <!-- Légende globale -->
+      <div style="padding:0 24px 8px">
+        <div class="chart-legend" id="global-legend" style="display:none">
+          <div class="legend-item"><div class="legend-line" style="background:var(--colA)"></div>A — Cluster central</div>
+          <div class="legend-item"><div class="legend-line" style="background:var(--colB)"></div>B — Cluster initial</div>
+          <div class="legend-item"><div class="legend-line" style="background:var(--colC)"></div>C — Cluster final</div>
+          <div class="legend-item"><div class="legend-line" style="background:rgba(100,100,100,0.4);border-top:1px dashed #999;height:0"></div>Pics historiques</div>
+        </div>
+      </div>
+
+      <!-- Insights par trajectoire -->
+      <div style="padding:0 24px 20px">
+        <div style="font-size:10px;font-family:var(--font-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:12px;padding-top:12px;border-top:1px solid var(--border)">
+          Expérience psychologique par trajectoire
+        </div>
+        <div class="insights-row">
+          <div class="insight-card A">
+            <div class="insight-traj">Trajectoire A</div>
+            <div class="insight-title">Cluster en milieu de période</div>
+            <div class="insight-desc">Les pertes se concentrent au centre de la séquence. Le trader observe une phase de récupération avant et après le drawdown.</div>
+          </div>
+          <div class="insight-card B">
+            <div class="insight-traj">Trajectoire B</div>
+            <div class="insight-title">Cluster en début de période</div>
+            <div class="insight-desc">Les pertes surviennent tôt. Le reste de la séquence se déroule sous le pic initial, avec une longue phase de reconstruction.</div>
+          </div>
+          <div class="insight-card C">
+            <div class="insight-traj">Trajectoire C</div>
+            <div class="insight-title">Cluster en fin de période</div>
+            <div class="insight-desc">Les pertes arrivent après une phase de gains. Le drawdown survient au terme de la séquence, sans temps de récupération visible.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="disclaimer">
+        ⚠️ Outil pédagogique — Variable isolée : clustering temporel des pertes — Hypothèses : distributions normales, pas de corrélation inter-périodes — Queues épaisses non modélisées
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+let pyodide  = null;
+let charts   = {};
+let simData  = null;
+let visible  = { A: true, B: true, C: true };
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (simData) setTimeout(() => { if (charts[name]) charts[name].resize(); }, 50);
+}
+
+function toggleTraj(t) {
+  visible[t] = !visible[t];
+  const tog = document.getElementById('toggle-' + t);
+  const chk = document.getElementById('check-' + t);
+  if (visible[t]) {
+    tog.classList.add('active-' + t);
+    chk.textContent = '✓';
+  } else {
+    tog.classList.remove('active-' + t);
+    chk.textContent = '○';
+  }
+  if (simData) updateVisibility();
+}
+
+function updateVisibility() {
+  ['capital','drawdown','perweek'].forEach(name => {
+    const c = charts[name];
+    if (!c) return;
+    c.data.datasets.forEach(ds => {
+      if (ds.trajId) ds.hidden = !visible[ds.trajId];
+    });
+    c.update();
+  });
+}
+
+async function initPyodide() {
+  const loading = document.getElementById('loading');
+  const btn     = document.getElementById('btn-run');
+  const txt     = document.getElementById('loading-text');
+  loading.classList.add('show'); btn.disabled = true;
+  txt.textContent = 'Chargement de Python…';
+  try {
+    pyodide = await loadPyodide();
+    txt.textContent = 'Python prêt ✓';
+    setTimeout(() => loading.classList.remove('show'), 1200);
+    btn.disabled = false;
+  } catch(e) { txt.textContent = 'Erreur de chargement'; }
+}
+
+async function runSimulation() {
+  if (!pyodide) { await initPyodide(); return; }
+  const loading = document.getElementById('loading');
+  const btn     = document.getElementById('btn-run');
+  const txt     = document.getElementById('loading-text');
+  loading.classList.add('show'); btn.disabled = true;
+  txt.textContent = 'Génération des trajectoires…';
+
+  const capital = parseFloat(document.getElementById('capital').value) || 10000;
+  const maxdd   = parseFloat(document.getElementById('maxdd').value) / 100;
+  const weeks   = parseInt(document.getElementById('weeks').value);
+  const tpw     = parseInt(document.getElementById('tpw').value);
+  const edge_input = parseFloat(document.getElementById('edge').value); // en %, ex: 0.7
+
+  const code = `
+import json, math, random
+
+capital    = ${capital}
+maxdd      = ${maxdd}
+weeks      = ${weeks}
+tpw        = ${tpw}
+edge_pct   = ${edge_input}
+n          = weeks * tpw
+
+# ── Paramètres ──
+RR = 2.5
+wr = (edge_pct + 1.0) / (RR + 1.0)
+wr = max(0.05, min(0.95, wr))
+
+n_wins_total   = int(round(wr * n))
+n_losses_total = n - n_wins_total
+
+# ══ Séquence principale (fenêtre cluster) ══
+# Principe :
+#   - k_loss pertes au cœur, AVEC rebonds intermédiaires (zigzag réaliste)
+#   - 1 rebond partiel intercalé toutes les BOUNCE_RATIO pertes
+#   - loss_pct recalibré (bissection) pour que la descente atteigne MaxDD exact
+#   - Gains pleins en enveloppe (avant/après le cœur), mélangés aléatoirement
+#
+# On dimensionne la fenêtre pour ~40% des trades totaux.
+
+k_loss = max(3, int(n_losses_total * 0.55))
+k_loss = min(k_loss, n_losses_total)
+
+# Paramètres de rebond
+BOUNCE_RATIO = 2      # 1 rebond toutes les 2 pertes
+BOUNCE_AMP   = 0.40   # rebond = 40% d'un gain plein (RR * loss_pct)
+
+n_bounces_in_core = k_loss // BOUNCE_RATIO
+
+# Calibration par bissection :
+# produit cumulé du cœur avec rebonds = 1 - maxdd
+def net_core_return(lp):
+    gp = RR * lp
+    return (1.0 - lp) ** k_loss * (1.0 + gp * BOUNCE_AMP) ** n_bounces_in_core
+
+target = 1.0 - maxdd
+lo_b, hi_b = 1e-6, 0.99
+for _ in range(60):
+    mid_b = (lo_b + hi_b) / 2.0
+    if net_core_return(mid_b) > target:
+        lo_b = mid_b
+    else:
+        hi_b = mid_b
+loss_pct = (lo_b + hi_b) / 2.0
+gain_pct = RR * loss_pct
+bounce_gain_pct = gain_pct * BOUNCE_AMP
+
+# Taille de la fenêtre cluster
+n_core    = k_loss + n_bounces_in_core
+n_cluster = max(n_core, int(n * 0.40))
+n_cluster = min(n_cluster, n - 2)
+
+n_wins_cluster   = n_cluster - n_core
+n_losses_cluster = k_loss
+
+if n_wins_cluster < 0:
+    n_cluster      = n_core
+    n_wins_cluster = 0
+
+# ══ Séquence secondaire (hors cluster) ══
+n_secondary  = n - n_cluster
+n_wins_sec   = max(0, n_wins_total - n_wins_cluster)
+n_losses_sec = max(0, n_losses_total - n_losses_cluster)
+
+# ── Constructeur de fenêtre cluster avec rebonds ──
+def make_cluster_window(n_wins_c, k_loss, n_bounces_in_core, gain_pct, loss_pct, bounce_gain_pct, seed):
+    """
+    Cœur : k_loss pertes avec BOUNCE_RATIO rebonds partiels intercalés (zigzag).
+    Enveloppe : gains pleins répartis aléatoirement avant/après le cœur.
+    """
+    random.seed(seed)
+    # Construction du cœur zigzag : L, L, bounce, L, L, bounce, ...
+    core = []
+    bounces_placed = 0
+    for i in range(k_loss):
+        core.append(-loss_pct)
+        if (i + 1) % BOUNCE_RATIO == 0 and bounces_placed < n_bounces_in_core:
+            core.append(bounce_gain_pct)
+            bounces_placed += 1
+    # Rebonds restants en fin de cœur
+    while bounces_placed < n_bounces_in_core:
+        core.append(bounce_gain_pct)
+        bounces_placed += 1
+
+    wins_before = random.randint(0, n_wins_c)
+    wins_after  = n_wins_c - wins_before
+    before_part = [gain_pct] * wins_before
+    after_part  = [gain_pct] * wins_after
+    random.shuffle(before_part)
+    random.shuffle(after_part)
+    return before_part + core + after_part
+
+# ── Constructeur de séquence secondaire ──
+def make_secondary_seq(n_wins, n_losses, gain_pct, loss_pct, seed):
+    """
+    Séquence secondaire : gains et pertes mélangés aléatoirement.
+    Produit une courbe en dents de scie réaliste.
+    """
+    random.seed(seed)
+    seq = [gain_pct] * n_wins + [-loss_pct] * n_losses
+    random.shuffle(seq)
+    return seq
+
+# ── Calculs equity ──
+def equity_from_seq(capital, seq):
+    equity = [round(capital, 2)]
+    c = capital
+    for r in seq:
+        c = c * (1.0 + r)
+        equity.append(round(c, 2))
+    return equity
+
+def calc_peak(equity):
+    peak = [equity[0]]
+    for v in equity[1:]: peak.append(max(peak[-1], v))
+    return peak
+
+def calc_dd(equity, peak):
+    return [round((equity[i] - peak[i]) / peak[i] * 100, 3) for i in range(len(equity))]
+
+def calc_weekly(equity, weeks, tpw):
+    return [round((equity[min((w+1)*tpw, len(equity)-1)] - equity[w*tpw]) / equity[w*tpw] * 100, 2)
+            for w in range(weeks)]
+
+def make_traj(capital, full_seq, weeks, tpw):
+    eq = equity_from_seq(capital, full_seq)
+    pk = calc_peak(eq)
+    dd = calc_dd(eq, pk)
+    return {"equity": eq, "peak": pk, "dd": dd,
+            "weekly": calc_weekly(eq, weeks, tpw),
+            "final":  round(eq[-1], 2),
+            "maxdd":  round(min(dd), 2)}
+
+# ── Fenêtre cluster (identique pour les 3 trajectoires) ──
+seq_cluster = make_cluster_window(n_wins_cluster, k_loss, n_bounces_in_core, gain_pct, loss_pct, bounce_gain_pct, seed=7)
+
+# ── Séquence secondaire complète mélangée ──
+seq_secondary = make_secondary_seq(n_wins_sec, n_losses_sec, gain_pct, loss_pct, seed=42)
+
+# Couper en deux moitiés pour la trajectoire A
+half = len(seq_secondary) // 2
+sec_first_half  = seq_secondary[:half]
+sec_second_half = seq_secondary[half:]
+# Re-mélanger chaque moitié indépendamment
+random.seed(13); random.shuffle(sec_first_half)
+random.seed(17); random.shuffle(sec_second_half)
+
+# ── 3 Trajectoires ──
+# A : 50% secondaire | cluster | 50% secondaire
+seq_A = sec_first_half + seq_cluster + sec_second_half
+
+# B : cluster | 100% secondaire
+seq_B = seq_cluster + seq_secondary
+
+# C : 100% secondaire | cluster
+seq_C = seq_secondary + seq_cluster
+
+traj_A = make_traj(capital, seq_A, weeks, tpw)
+traj_B = make_traj(capital, seq_B, weeks, tpw)
+traj_C = make_traj(capital, seq_C, weeks, tpw)
+
+result = {
+    "A": traj_A, "B": traj_B, "C": traj_C,
+    "params": {
+        "capital":   capital,
+        "maxdd":     -round(maxdd * 100, 1),
+        "weeks":     weeks, "tpw": tpw, "n": n,
+        "wr":        round(wr * 100, 1),
+        "n_wins":    n_wins_total,
+        "n_losses":  n_losses_total,
+        "edge":      round(edge_pct, 2),
+        "loss_pct":  round(loss_pct * 100, 3),
+        "gain_pct":  round(gain_pct * 100, 3),
+        "final_A":   traj_A["final"],
+        "final_B":   traj_B["final"],
+        "final_C":   traj_C["final"],
+        "maxdd_A":   traj_A["maxdd"],
+        "maxdd_B":   traj_B["maxdd"],
+        "maxdd_C":   traj_C["maxdd"],
+    }
+}
+json.dumps(result)
+`;
+
+
+  try {
+    const raw = await pyodide.runPythonAsync(code);
+    simData = JSON.parse(raw);
+    renderAll(simData, capital, weeks, tpw);
+    loading.classList.remove('show');
+    btn.disabled = false;
+  } catch(e) {
+    txt.textContent = 'Erreur : ' + e.message;
+    btn.disabled = false;
+    console.error(e);
+  }
+}
+
+function renderAll(data, capital, weeks, tpw) {
+  const p = data.params;
+  const fmt = v => {
+    const abs = Math.abs(v);
+    if (abs >= 1e6) return (v/1e6).toFixed(2)+'M€';
+    if (abs >= 1e3) return (v/1e3).toFixed(1)+'k€';
+    return v.toFixed(0)+'€';
+  };
+
+  // MaxDD réels des 3 trajectoires
+  const mA = p.maxdd_A !== undefined ? p.maxdd_A.toFixed(1) : '—';
+  const mB = p.maxdd_B !== undefined ? p.maxdd_B.toFixed(1) : '—';
+  const mC = p.maxdd_C !== undefined ? p.maxdd_C.toFixed(1) : '—';
+
+  // Métriques communes
+  document.getElementById('m-maxdd').textContent     = p.maxdd + '%';
+  document.getElementById('m-maxdd-sub').textContent = `A ${mA}%  ·  B ${mB}%  ·  C ${mC}%`;
+  document.getElementById('m-duration').textContent  = p.weeks + ' sem.';
+  document.getElementById('m-duration-sub').textContent = p.n + ' trades au total';
+  document.getElementById('m-edge').textContent = (p.edge >= 0 ? '+' : '') + p.edge + '%';
+  document.getElementById('m-edge').title = `WR : ${p.wr}%  ·  RRR 1:2.5  ·  ${p.n_wins}W / ${p.n_losses}L sur ${p.n} trades`;
+  if (document.getElementById('m-wr')) document.getElementById('m-wr').textContent = p.wr + '%';
+
+  // Capitaux finaux séparés A / B / C
+  const fmtPerf = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+  const perfA = ((p.final_A - capital) / capital * 100);
+  const perfB = ((p.final_B - capital) / capital * 100);
+  const perfC = ((p.final_C - capital) / capital * 100);
+  document.getElementById('m-final').textContent    = fmt(p.final_A);
+  document.getElementById('m-final-sub').textContent =
+    `A ${fmtPerf(perfA)}  ·  B ${fmtPerf(perfB)}  ·  C ${fmtPerf(perfC)}`;
+
+  document.getElementById('global-legend').style.display = 'flex';
+
+  const labels  = Array.from({length: p.n + 1}, (_, i) => i);
+  const wLabels = Array.from({length: weeks}, (_, i) => 'S' + (i + 1));
+
+  renderCapital(data, labels, capital);
+  renderDrawdown(data, labels, p.maxdd);
+  renderPerWeek(data, wLabels, weeks);
+  renderAnnotations(weeks, tpw);
+}
+
+const COLORS = { A: '#1d3557', B: '#2c6e49', C: '#c0392b' };
+const NAMES  = { A: 'A — Uniforme', B: 'B — 2 clusters', C: 'C — Cluster dense' };
+
+function makeDataset(trajData, key, field, opts) {
+  return {
+    label: NAMES[key],
+    data: trajData[field],
+    borderColor: COLORS[key],
+    trajId: key,
+    hidden: !visible[key],
+    ...opts
+  };
+}
+
+// ── Chart 1 : Courbes de capital ──
+function renderCapital(data, labels, capital) {
+  const canvas = document.getElementById('chart-capital');
+  document.getElementById('empty-capital').style.display = 'none';
+  canvas.style.display = 'block';
+  if (charts.capital) charts.capital.destroy();
+
+  const fmt = v => v >= 1000 ? (v/1000).toFixed(1)+'k€' : v.toFixed(0)+'€';
+
+  const ddFill = { A: 'rgba(29,53,87,0.13)', B: 'rgba(44,110,73,0.13)', C: 'rgba(192,57,43,0.13)' };
+  const peakCol = { A: 'rgba(29,53,87,0.35)', B: 'rgba(44,110,73,0.35)', C: 'rgba(192,57,43,0.35)' };
+
+  const datasets = [];
+  ['A','B','C'].forEach(k => {
+    datasets.push({
+      label: `Pic ${k}`,
+      data: data[k].peak,
+      borderColor: peakCol[k],
+      borderWidth: 1,
+      borderDash: [4, 3],
+      pointRadius: 0,
+      tension: 0.2,
+      fill: false,
+      trajId: k,
+      isPeak: true,
+    });
+    datasets.push({
+      label: NAMES[k],
+      data: data[k].equity,
+      borderColor: COLORS[k],
+      borderWidth: k === 'A' ? 2.5 : 2,
+      pointRadius: 0,
+      tension: 0.2,
+      fill: { target: '-1', above: 'rgba(0,0,0,0)', below: ddFill[k] },
+      trajId: k,
+      isPeak: false,
+    });
+  });
+
+  charts.capital = new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      animation: { duration: 500 },
+      responsive: true, maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#fff', borderColor: '#e2dfd8', borderWidth: 1,
+          titleColor: '#8a8880', bodyColor: '#1a1a1a',
+          filter: item => !item.dataset.isPeak && item.dataset.trajId !== null,
+          callbacks: { label: ctx => ` ${ctx.dataset.label} : ${fmt(ctx.raw)}` }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#8a8880', font: { size: 10, family: 'DM Mono' }, maxTicksLimit: 10 }, grid: { color: 'rgba(200,196,188,0.5)' }, title: { display: true, text: 'Trades', color: '#8a8880', font: { size: 11 } } },
+        y: { ticks: { color: '#8a8880', font: { size: 10, family: 'DM Mono' }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k€' : v+'€' }, grid: { color: 'rgba(200,196,188,0.5)' } }
+      }
+    }
+  });
+}
+
+// ── Chart 2 : Drawdown ──
+function renderDrawdown(data, labels, maxddPct) {
+  const canvas = document.getElementById('chart-drawdown');
+  document.getElementById('empty-drawdown').style.display = 'none';
+  canvas.style.display = 'block';
+  if (charts.drawdown) charts.drawdown.destroy();
+
+  const alphaMap = { A: 'rgba(29,53,87,0.12)', B: 'rgba(44,110,73,0.12)', C: 'rgba(192,57,43,0.12)' };
+  const maxddLine = new Array(labels.length).fill(maxddPct);  // maxddPct est négatif
+
+  charts.drawdown = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        ...['A','B','C'].map(k => makeDataset(data[k], k, 'dd', {
+          borderWidth: k === 'A' ? 2.5 : 2,
+          pointRadius: 0,
+          tension: 0.25,
+          backgroundColor: alphaMap[k],
+          fill: { target: 'origin', below: alphaMap[k] },
+        })),
+        {
+          label: `MaxDD garanti (${maxddPct}%)`,
+          data: maxddLine,
+          borderColor: 'rgba(146,96,10,0.75)',
+          borderWidth: 1.5,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false,
+          trajId: null,
+        }
+      ]
+    },
+    options: {
+      animation: { duration: 500 },
+      responsive: true, maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#fff', borderColor: '#e2dfd8', borderWidth: 1,
+          titleColor: '#8a8880', bodyColor: '#1a1a1a',
+          callbacks: { label: ctx => ` ${ctx.dataset.label} : ${ctx.raw.toFixed(2)}%` }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#8a8880', font: { size: 10, family: 'DM Mono' }, maxTicksLimit: 10 }, grid: { color: 'rgba(200,196,188,0.5)' }, title: { display: true, text: 'Trades', color: '#8a8880', font: { size: 11 } } },
+        y: { ticks: { color: '#8a8880', font: { size: 10, family: 'DM Mono' }, callback: v => v.toFixed(0)+'%' }, grid: { color: 'rgba(200,196,188,0.5)' }, title: { display: true, text: 'Drawdown (%)', color: '#8a8880', font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ── Chart 3 : P&L hebdomadaire ──
+function renderPerWeek(data, wLabels, weeks) {
+  const canvas = document.getElementById('chart-perweek');
+  document.getElementById('empty-perweek').style.display = 'none';
+  canvas.style.display = 'block';
+  if (charts.perweek) charts.perweek.destroy();
+
+  charts.perweek = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: wLabels,
+      datasets: ['A','B','C'].map(k => ({
+        label: NAMES[k],
+        data: data[k].weekly,
+        backgroundColor: data[k].weekly.map(v => v >= 0
+          ? COLORS[k] + '55'
+          : COLORS[k] + 'cc'),
+        borderColor: COLORS[k],
+        borderWidth: 1,
+        borderRadius: 3,
+        trajId: k,
+        hidden: !visible[k],
+      }))
+    },
+    options: {
+      animation: { duration: 500 },
+      responsive: true, maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          labels: { color: '#8a8880', font: { size: 11, family: 'DM Mono' }, boxWidth: 12 }
+        },
+        tooltip: {
+          backgroundColor: '#fff', borderColor: '#e2dfd8', borderWidth: 1,
+          titleColor: '#8a8880', bodyColor: '#1a1a1a',
+          callbacks: { label: ctx => ` ${ctx.dataset.label} : ${ctx.raw.toFixed(2)}%` }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#8a8880', font: { size: 10, family: 'DM Mono' } }, grid: { display: false } },
+        y: { ticks: { color: '#8a8880', font: { size: 10, family: 'DM Mono' }, callback: v => v.toFixed(0)+'%' }, grid: { color: 'rgba(200,196,188,0.5)' }, title: { display: true, text: 'P&L hebdo (%)', color: '#8a8880', font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+function renderAnnotations(weeks, tpw) {
+  ['capital','drawdown'].forEach(tab => {
+    const el = document.getElementById('annot-' + tab);
+    el.style.display = 'flex';
+    el.innerHTML = `
+      <span class="cluster-tag A">A : pertes uniformes sur ${weeks} sem.</span>
+      <span class="cluster-tag B">B : clusters S2-S3 · S${Math.floor(weeks*0.7)}-S${Math.floor(weeks*0.8)}</span>
+      <span class="cluster-tag C">C : cluster dense S${weeks-2}-S${weeks-1}-S${weeks}</span>
+    `;
+  });
+}
+
+window.addEventListener('load', initPyodide);
+</script>
+</body>
+</html>
